@@ -262,25 +262,100 @@ def get_case(case_id: str = Path(...)):
     # Debug: log raw counts
     raw_nodes = state.get("subgraph_nodes", [])
     raw_edges = state.get("subgraph_edges", [])
-    logger.info(f"get_case {case_id}: raw state has {len(raw_nodes)} nodes, {len(raw_edges)} edges")
+    all_seen_node_ids = state.get("seen_nodes", [])
+    scores = state.get("scores", {})
+    fraud_ring_ids = set(state.get("fraud_ring_nodes", []))
+    suspect_id = state.get("suspect_account_id", "")
     
-    # Deduplicate nodes and edges before returning
-    nodes = raw_nodes
-    edges = raw_edges
+    unique_seen = set(all_seen_node_ids)
+    logger.info(f"get_case {case_id}: raw={len(raw_nodes)} nodes, {len(raw_edges)} edges, seen_nodes={len(all_seen_node_ids)} (unique={len(unique_seen)})")
+    logger.info(f"get_case {case_id}: fraud_ring_ids={fraud_ring_ids}, suspect={suspect_id}")
     
-    # Dedupe nodes by ID, keeping the last occurrence (which has updated type)
-    seen_node_ids = {}
-    for node in nodes:
-        seen_node_ids[node["id"]] = node
-    unique_nodes = list(seen_node_ids.values())
+    # Dedupe subgraph nodes by ID, keeping the last occurrence (which has updated type)
+    subgraph_node_map = {}
+    for node in raw_nodes:
+        subgraph_node_map[node["id"]] = node
     
     # Dedupe edges by source-target-type triple (keep different edge types)
     seen_edge_keys = {}
-    for edge in edges:
+    for edge in raw_edges:
         edge_type = edge.get("edge_type", "UNKNOWN")
         key = f"{edge['source']}->{edge['target']}:{edge_type}"
         seen_edge_keys[key] = edge
     unique_edges = list(seen_edge_keys.values())
+    
+    # =========================================================================
+    # Build FULL exploration graph - includes ALL seen nodes
+    # =========================================================================
+    full_exploration_nodes = []
+    for node_id in set(all_seen_node_ids):  # Dedupe seen_nodes
+        if node_id in subgraph_node_map:
+            # Use existing node with its type
+            full_exploration_nodes.append(subgraph_node_map[node_id])
+        else:
+            # Create a node object for nodes only in seen_nodes
+            score_info = scores.get(node_id, {})
+            score = score_info.get("score", 0) if score_info else 0
+            
+            # Determine type based on fraud ring membership and score
+            if node_id == suspect_id:
+                node_type = "suspect"
+            elif node_id in fraud_ring_ids:
+                node_type = "ring_candidate"
+            elif score >= 0.8:
+                node_type = "ring_candidate"
+            else:
+                node_type = "innocent"
+            
+            # Determine label (account, device, or ip based on ID prefix)
+            if node_id.startswith("D_"):
+                label = "device"
+                node_type = "device"  # Will be updated below if connected to 2+ fraud accounts
+            elif node_id.startswith("IP_"):
+                label = "ip"
+                node_type = "ip"  # Will be updated below if connected to 2+ fraud accounts
+            else:
+                label = "account"
+            
+            # For devices/IPs, check if connected to 2+ fraud accounts
+            if label in ["device", "ip"]:
+                fraud_connections = 0
+                for edge in unique_edges:
+                    if edge.get("source") == node_id or edge.get("target") == node_id:
+                        other_id = edge.get("target") if edge.get("source") == node_id else edge.get("source")
+                        if other_id in fraud_ring_ids or other_id == suspect_id:
+                            fraud_connections += 1
+                if fraud_connections >= 2:
+                    node_type = "ring_infrastructure"
+            
+            full_exploration_nodes.append({
+                "id": node_id,
+                "label": label,
+                "type": node_type,
+                "properties": {
+                    "score": score,
+                    "bucket": score_info.get("bucket", "low") if score_info else "low"
+                }
+            })
+    
+    # =========================================================================
+    # Build FRAUD RING only graph - just fraud ring members
+    # =========================================================================
+    fraud_ring_types = {"suspect", "ring_candidate", "ring_infrastructure"}
+    fraud_ring_nodes_only = [
+        n for n in full_exploration_nodes 
+        if n.get("type") in fraud_ring_types or n.get("id") in fraud_ring_ids
+    ]
+    fraud_ring_node_ids = set(n["id"] for n in fraud_ring_nodes_only)
+    
+    # Edges where BOTH endpoints are fraud ring members (for fraud ring view)
+    fraud_ring_edges_only = [
+        e for e in unique_edges
+        if e.get("source") in fraud_ring_node_ids and e.get("target") in fraud_ring_node_ids
+    ]
+    
+    # For backward compatibility, unique_nodes = subgraph nodes only
+    unique_nodes = list(subgraph_node_map.values())
     
     return {
         "case_id": case_id,
@@ -289,15 +364,26 @@ def get_case(case_id: str = Path(...)):
         "current_node": state.get("current_node", "unknown"),
         "current_hop": state.get("current_hop", 0),
         "estimated_cost": state.get("estimated_cost", 0),
-        "nodes_explored": len(state.get("seen_nodes", [])),
+        "nodes_explored": len(all_seen_node_ids),
         "fraud_ring_size": len(state.get("fraud_ring_nodes", [])),
         "fraud_ring_nodes": state.get("fraud_ring_nodes", []),
         "innocent_count": len(state.get("innocent_neighbors", [])),
+        # Keep existing subgraph for backward compatibility
         "subgraph": {
             "nodes": unique_nodes,
             "edges": unique_edges
         },
-        "scores": state.get("scores", {}),
+        # Full exploration graph - ALL seen nodes
+        "full_subgraph": {
+            "nodes": full_exploration_nodes,
+            "edges": unique_edges
+        },
+        # Fraud ring only graph
+        "fraud_ring_subgraph": {
+            "nodes": fraud_ring_nodes_only,
+            "edges": fraud_ring_edges_only
+        },
+        "scores": scores,
         "evidence_summary": state.get("evidence_summary", {}),
         "report_markdown": state.get("report_markdown", "")
     }

@@ -179,7 +179,7 @@ class RiskScoringTool:
         # Determine bucket
         if normalized_score >= 0.8:
             bucket = "critical"
-        elif normalized_score >= 0.6:
+        elif normalized_score >= 0.8:
             bucket = "high"
         elif normalized_score >= 0.4:
             bucket = "medium"

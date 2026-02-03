@@ -44,7 +44,7 @@ def select_candidates_node(state: GraphState, services: Dict[str, Any]) -> Dict[
     ranked_accounts = [account_id for account_id, _ in scored_items]
     
     # Identify high-risk candidates
-    high_risk_threshold = 0.6
+    high_risk_threshold = 0.8
     high_risk_accounts = [
         account_id for account_id, score_info in scored_items
         if score_info.get("score", 0) >= high_risk_threshold

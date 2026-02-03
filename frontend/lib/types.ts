@@ -24,6 +24,8 @@ export interface Case {
   fraud_ring_nodes?: string[];
   innocent_count: number;
   subgraph: SubgraphData;
+  full_subgraph?: SubgraphData;
+  fraud_ring_subgraph?: SubgraphData;
   scores: Record<string, AccountScore>;
   evidence_summary: EvidenceSummary;
   report_markdown: string;

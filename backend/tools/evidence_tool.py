@@ -93,11 +93,18 @@ class EvidenceTool:
             fraud_ring_nodes, subgraph_edges
         )
         
+        # Deduplicate counts for accurate metrics
+        unique_nodes = {n.get("id") for n in subgraph_nodes if n.get("id")}
+        unique_edges = {
+            f"{e.get('source')}->{e.get('target')}:{e.get('edge_type', '')}" 
+            for e in subgraph_edges
+        }
+        
         summary = {
             "ring_size": len(fraud_ring_nodes),
             "innocent_count": len(innocent_nodes),
-            "total_nodes_explored": len(subgraph_nodes),
-            "total_edges_explored": len(subgraph_edges),
+            "total_nodes_explored": len(unique_nodes),
+            "total_edges_explored": len(unique_edges),
             "shared_device_count": len(shared_devices.get("devices", [])),
             "shared_ip_count": len(shared_ips.get("ips", [])),
             "ring_density": ring_density,

@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Play, RefreshCw, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Play, RefreshCw, CheckCircle, AlertCircle, Loader2, Network, Target } from 'lucide-react'
 
 import { getAlert, startCase, getCase, runCase } from '@/lib/api'
 import { useSSE } from '@/hooks/useSSE'
@@ -18,6 +18,7 @@ import ReportPanel from '@/components/ReportPanel'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 type TabType = 'trace' | 'evidence' | 'report'
+type GraphViewType = 'full' | 'fraud_ring'
 
 function CasePageContent() {
   const searchParams = useSearchParams()
@@ -30,6 +31,7 @@ function CasePageContent() {
   const [caseId, setCaseId] = useState<string | null>(caseIdParam)
   const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'starting' | 'running' | 'completed' | 'error'>('idle')
   const [activeTab, setActiveTab] = useState<TabType>('trace')
+  const [graphView, setGraphView] = useState<GraphViewType>('full')
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>([])
   const [error, setError] = useState<string | null>(null)
   
@@ -251,14 +253,78 @@ function CasePageContent() {
           />
         </div>
         
-        {/* Center: Graph */}
-        <div className="flex-1 p-3 min-w-0">
-          <GraphExplorer
-            nodes={caseData?.subgraph?.nodes || []}
-            edges={caseData?.subgraph?.edges || []}
-            suspectId={alert?.account_id}
-            fraudRingIds={caseData?.fraud_ring_nodes || []}
-          />
+        {/* Center: Graph with View Toggle */}
+        <div className="flex-1 p-3 min-w-0 flex flex-col">
+          {/* Graph View Tabs */}
+          <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+            <button
+              onClick={() => setGraphView('full')}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                graphView === 'full'
+                  ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan/50'
+                  : 'bg-bg-tertiary text-text-muted hover:text-text-secondary border border-border-default'
+              }`}
+            >
+              <Network className="h-4 w-4" />
+              Full Exploration
+            </button>
+            <button
+              onClick={() => setGraphView('fraud_ring')}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                graphView === 'fraud_ring'
+                  ? 'bg-accent-orange/20 text-accent-orange border border-accent-orange/50'
+                  : 'bg-bg-tertiary text-text-muted hover:text-text-secondary border border-border-default'
+              }`}
+            >
+              <Target className="h-4 w-4" />
+              Fraud Ring Only
+            </button>
+          </div>
+          
+          {/* Graph Component */}
+          <div className="flex-1 min-h-0">
+            <GraphExplorer
+              nodes={graphView === 'full' 
+                ? (caseData?.full_subgraph?.nodes || caseData?.subgraph?.nodes || [])
+                : (caseData?.fraud_ring_subgraph?.nodes || [])
+              }
+              edges={graphView === 'full'
+                ? (caseData?.full_subgraph?.edges || caseData?.subgraph?.edges || [])
+                : (caseData?.fraud_ring_subgraph?.edges || [])
+              }
+              suspectId={alert?.account_id}
+              fraudRingIds={caseData?.fraud_ring_nodes || []}
+              viewMode={graphView}
+            />
+          </div>
+          
+          {/* Info Banner */}
+          {caseData && (
+            <div className="mt-3 flex-shrink-0 bg-bg-secondary border border-border-default rounded-lg px-4 py-2">
+              <div className="flex items-center justify-between text-sm">
+                {graphView === 'full' ? (
+                  <>
+                    <span className="text-text-secondary">
+                      Explored <span className="text-accent-cyan font-semibold">{caseData.full_subgraph?.nodes?.length || caseData.subgraph?.nodes?.length || 0}</span> nodes
+                      {' '}across <span className="text-accent-cyan font-semibold">{caseData.current_hop}</span> hops
+                    </span>
+                    <span className="text-text-muted">
+                      Fraud ring: <span className="text-accent-orange font-semibold">{caseData.fraud_ring_size}</span> members highlighted
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-text-secondary">
+                      Fraud Ring: <span className="text-accent-orange font-semibold">{caseData.fraud_ring_size}</span> members
+                    </span>
+                    <span className="text-text-muted">
+                      {caseData.fraud_ring_subgraph?.edges?.length || 0} connecting edges
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Right: Tabs (Trace/Evidence/Report) */}

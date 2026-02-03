@@ -1,7 +1,7 @@
 'use client'
 
 import { EvidenceSummary } from '@/lib/types'
-import { Shield, Users, Server, Globe, TrendingUp } from 'lucide-react'
+import { Shield, Users, Server, Globe, TrendingUp, Search, AlertTriangle } from 'lucide-react'
 
 interface EvidencePanelProps {
   evidence: EvidenceSummary | null
@@ -18,8 +18,73 @@ export default function EvidencePanel({ evidence }: EvidencePanelProps) {
 
   const { summary, proof_bullets, shared_infrastructure, innocent_rationale } = evidence
 
+  // Calculate detection percentage
+  const detectionRate = summary.total_nodes_explored > 0 
+    ? ((summary.ring_size / summary.total_nodes_explored) * 100).toFixed(1)
+    : '0'
+
   return (
     <div className="h-full overflow-y-auto space-y-4 pr-1">
+      {/* Exploration Summary - How fraud ring was detected */}
+      <div className="bg-gradient-to-br from-accent-orange/10 to-accent-red/10 border border-accent-orange/30 rounded-lg p-3">
+        <h4 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+          <Search className="h-4 w-4 text-accent-orange" />
+          Graph Exploration Summary
+        </h4>
+        <div className="space-y-2 text-sm text-text-secondary">
+          <p>
+            Explored <span className="text-accent-cyan font-semibold">{summary.total_nodes_explored}</span> accounts 
+            {summary.total_edges_explored > 0 && (
+              <> through <span className="text-accent-cyan font-semibold">{summary.total_edges_explored}</span> connections</>
+            )}
+          </p>
+          <p>
+            Identified <span className="text-accent-orange font-semibold">{summary.ring_size}</span> fraud ring members 
+            (<span className="text-accent-orange">{detectionRate}%</span> of explored)
+          </p>
+          {summary.innocent_count > 0 && (
+            <p>
+              Cleared <span className="text-accent-green font-semibold">{summary.innocent_count}</span> accounts as innocent
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Detection Method Explanation */}
+      <div className="bg-bg-tertiary border border-border-default rounded-lg p-3">
+        <h4 className="text-sm font-semibold text-text-primary mb-2 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-accent-yellow" />
+          Detection Method
+        </h4>
+        <div className="space-y-2 text-xs text-text-secondary">
+          <p>The fraud ring was detected through:</p>
+          <ul className="space-y-1 ml-2">
+            {summary.shared_device_count > 0 && (
+              <li className="flex items-start gap-1">
+                <span className="text-accent-cyan">•</span>
+                <span><span className="text-accent-cyan font-semibold">{summary.shared_device_count}</span> shared device(s) linking multiple accounts</span>
+              </li>
+            )}
+            {summary.shared_ip_count > 0 && (
+              <li className="flex items-start gap-1">
+                <span className="text-accent-purple">•</span>
+                <span><span className="text-accent-purple font-semibold">{summary.shared_ip_count}</span> shared IP address(es) indicating same origin</span>
+              </li>
+            )}
+            <li className="flex items-start gap-1">
+              <span className="text-accent-orange">•</span>
+              <span>Risk scoring above <span className="text-accent-orange font-semibold">80%</span> threshold (avg: {(summary.avg_ring_score * 100).toFixed(0)}%)</span>
+            </li>
+            {summary.ring_density > 0 && (
+              <li className="flex items-start gap-1">
+                <span className="text-accent-red">•</span>
+                <span>High interconnection density ({(summary.ring_density * 100).toFixed(1)}%)</span>
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+
       {/* Summary Stats */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-accent-red/10 border border-accent-red/30 rounded-lg p-3">

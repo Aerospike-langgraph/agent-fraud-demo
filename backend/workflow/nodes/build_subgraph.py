@@ -38,7 +38,7 @@ def build_subgraph_node(state: GraphState, services: Dict[str, Any]) -> Dict[str
     )
     
     # Classify accounts
-    fraud_ring_threshold = 0.6
+    fraud_ring_threshold = 0.8
     fraud_ring_accounts: Set[str] = {suspect_account_id}  # Always include suspect
     innocent_accounts: Set[str] = set()
     
@@ -88,13 +88,18 @@ def build_subgraph_node(state: GraphState, services: Dict[str, Any]) -> Dict[str
         elif node["id"] in innocent_accounts:
             node_copy["type"] = "innocent"
         elif node.get("label") in ["device", "ip"]:
-            # Check if this device/IP is connected to ring members
-            connected_to_ring = any(
-                (e.get("source") == node["id"] or e.get("target") == node["id"]) and
-                (e.get("source") in fraud_ring_accounts or e.get("target") in fraud_ring_accounts)
-                for e in subgraph_edges
-            )
-            node_copy["type"] = "ring_infrastructure" if connected_to_ring else node.get("type", "background")
+            # Count how many FRAUD RING accounts are connected to this device/IP
+            # Only mark as ring_infrastructure if connected to 2+ fraud accounts
+            fraud_connections = 0
+            for e in subgraph_edges:
+                if e.get("source") == node["id"] or e.get("target") == node["id"]:
+                    # Get the other end of the edge
+                    other_id = e.get("target") if e.get("source") == node["id"] else e.get("source")
+                    if other_id in fraud_ring_accounts:
+                        fraud_connections += 1
+            
+            # Only mark as ring_infrastructure if shared by 2+ fraud accounts
+            node_copy["type"] = "ring_infrastructure" if fraud_connections >= 2 else node.get("label", "background")
         updated_nodes.append(node_copy)
     
     # Create trace event
