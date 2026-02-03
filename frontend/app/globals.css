@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+}
+
+body {
+  background: var(--bg-primary);
+  color: #e6edf3;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(63, 185, 80, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(248, 81, 73, 0.3);
+}
+
+/* Animated background gradient */
+.gradient-bg {
+  background: linear-gradient(
+    135deg,
+    rgba(88, 166, 255, 0.1) 0%,
+    rgba(163, 113, 247, 0.1) 50%,
+    rgba(219, 97, 162, 0.1) 100%
+  );
+}
+
+/* Code/terminal style */
+.terminal-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+/* Pulse animation for active nodes */
+@keyframes node-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.node-active {
+  animation: node-pulse 1.5s ease-in-out infinite;
+}
+
+/* Stepper styles */
+.stepper-line {
+  background: linear-gradient(
+    to bottom,
+    #30363d 0%,
+    #58a6ff 50%,
+    #30363d 100%
+  );
+}
+
+.stepper-dot-active {
+  background: #58a6ff;
+  box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+}
+
+.stepper-dot-completed {
+  background: #3fb950;
+}
+
+.stepper-dot-pending {
+  background: #30363d;
+  border: 2px solid #484f58;
+}

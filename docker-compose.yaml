@@ -1,0 +1,104 @@
+services:
+  # Aerospike Database
+  aerospike-db:
+    image: aerospike/aerospike-server-enterprise:8.0.0.7
+    container_name: agentic-fraud-db
+    healthcheck:
+      test: ["CMD", "asinfo", "-p", "3000", "-v", "build"]
+      interval: 5s
+      timeout: 20s
+      retries: 4
+    networks:
+      - fraud_net
+    ports:
+      - "3000-3002:3000-3002"
+    volumes:
+      - aerospike_data:/opt/aerospike/data
+
+  # Aerospike Graph Service
+  aerospike-graph-service:
+    image: aerospike/aerospike-graph-service:3.0.0
+    container_name: agentic-fraud-graph
+    depends_on:
+      aerospike-db:
+        condition: service_healthy
+    environment:
+      - aerospike.client.namespace=test
+      - aerospike.client.host=aerospike-db
+      - aerospike.graph.index.vertex.label.enabled=true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/healthcheck"]
+      interval: 5s
+      timeout: 10s
+      retries: 4
+    networks:
+      - fraud_net
+    ports:
+      - "8182:8182"
+      - "9090:9090"
+    volumes:
+      - ./data:/data
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: agentic-fraud-backend
+    depends_on:
+      aerospike-db:
+        condition: service_healthy
+      aerospike-graph-service:
+        condition: service_healthy
+    environment:
+      - GRAPH_HOST_ADDRESS=aerospike-graph-service
+      - AEROSPIKE_HOST=aerospike-db
+      - DATA_DIR=/data/synthetic_fraud_data
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')"]
+      interval: 5s
+      timeout: 10s
+      retries: 4
+      start_period: 10s
+    networks:
+      - fraud_net
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/backend
+      - ../data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: agentic-fraud-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    networks:
+      - fraud_net
+    ports:
+      - "3010:3010"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3010', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  aerospike_data:
+
+networks:
+  fraud_net:
+    name: agentic_fraud_net
